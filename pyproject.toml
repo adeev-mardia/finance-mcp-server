@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finance-mcp-server"
+version = "0.1.0"
+description = "An MCP server exposing personal-finance analytics tools over a local SQLite ledger."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Adeev Mardia" }]
+dependencies = [
+    "mcp>=1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+finance-mcp-server = "finance_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
