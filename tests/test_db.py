@@ -99,3 +99,43 @@ def test_budget_status_over_budget(temp_db):
     dining = next(r for r in status if r["category"] == "Dining Out")
     assert dining["over_budget"] is True
     assert dining["remaining"] == -30.0
+
+
+def test_update_transaction_changes_only_given_fields(temp_db):
+    result = db.add_transaction(amount=-40.0, category="Groceries", occurred_on="2026-09-01", merchant="Store A", db_path=temp_db)
+
+    updated = db.update_transaction(result.id, amount=-45.0, db_path=temp_db)
+    assert updated.amount == -45.0
+    assert updated.category == "Groceries"  # unchanged
+    assert updated.merchant == "Store A"  # unchanged
+
+
+def test_update_transaction_can_change_category(temp_db):
+    result = db.add_transaction(amount=-20.0, category="Groceries", occurred_on="2026-09-01", db_path=temp_db)
+    updated = db.update_transaction(result.id, category="Dining Out", db_path=temp_db)
+    assert updated.category == "Dining Out"
+
+    txns = db.list_transactions(category="Dining Out", db_path=temp_db)
+    assert len(txns) == 1
+
+
+def test_update_transaction_missing_id_raises(temp_db):
+    with pytest.raises(ValueError):
+        db.update_transaction(99999, amount=-1.0, db_path=temp_db)
+
+
+def test_delete_transaction(temp_db):
+    result = db.add_transaction(amount=-20.0, category="Groceries", occurred_on="2026-09-01", db_path=temp_db)
+    assert db.delete_transaction(result.id, db_path=temp_db) is True
+    assert db.list_transactions(db_path=temp_db) == []
+    assert db.delete_transaction(result.id, db_path=temp_db) is False
+
+
+def test_list_categories_includes_defaults(temp_db):
+    categories = db.list_categories(db_path=temp_db)
+    names = {c["name"] for c in categories}
+    assert "Groceries" in names
+    assert "Salary" in names
+    kinds = {c["name"]: c["kind"] for c in categories}
+    assert kinds["Salary"] == "income"
+    assert kinds["Groceries"] == "expense"

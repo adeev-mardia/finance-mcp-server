@@ -48,3 +48,35 @@ def test_budget_tools_round_trip():
     entry = next(s for s in status if s["category"] == "Entertainment")
     assert entry["spent"] == 40.0
     assert entry["remaining"] == 60.0
+
+
+def test_update_and_delete_transaction_tools():
+    added = _fn("add_transaction")(amount=-30.0, category="Transport", occurred_on="2026-09-05")
+    updated = _fn("update_transaction")(transaction_id=added["id"], amount=-35.0)
+    assert updated["amount"] == -35.0
+
+    deleted = _fn("delete_transaction")(transaction_id=added["id"])
+    assert deleted["deleted"] is True
+
+
+def test_list_categories_tool():
+    categories = _fn("list_categories")()
+    assert any(c["name"] == "Groceries" for c in categories)
+
+
+def test_import_and_export_csv_tools(tmp_path):
+    import csv
+
+    src = tmp_path / "import.csv"
+    with open(src, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["Date", "Amount", "Description"])
+        writer.writeheader()
+        writer.writerow({"Date": "2026-09-01", "Amount": "-15.00", "Description": "Bookstore"})
+
+    result = _fn("import_transactions_csv")(file_path=str(src))
+    assert result["imported"] == 1
+
+    out = tmp_path / "export.csv"
+    export_result = _fn("export_transactions_csv")(file_path=str(out))
+    assert export_result["rows_written"] == 1
+    assert out.exists()

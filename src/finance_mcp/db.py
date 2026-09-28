@@ -241,6 +241,71 @@ def set_budget(category: str, monthly_limit: float, db_path: Optional[str] = Non
         return {"category": category, "monthly_limit": monthly_limit}
 
 
+def update_transaction(
+    transaction_id: int,
+    amount: Optional[float] = None,
+    category: Optional[str] = None,
+    occurred_on: Optional[str] = None,
+    merchant: Optional[str] = None,
+    note: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> TransactionResult:
+    """Update one or more fields of an existing transaction. Fields left as
+    None are left unchanged. Raises ValueError if the id doesn't exist."""
+    with get_connection(db_path) as conn:
+        row = conn.execute(
+            """SELECT t.id, t.occurred_on, t.amount, c.name AS category, t.merchant, t.note
+               FROM transactions t JOIN categories c ON c.id = t.category_id
+               WHERE t.id = ?""",
+            (transaction_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"no transaction with id {transaction_id}")
+
+        new_amount = amount if amount is not None else row["amount"]
+        new_occurred_on = _validate_date(occurred_on) if occurred_on else row["occurred_on"]
+        new_merchant = merchant if merchant is not None else row["merchant"]
+        new_note = note if note is not None else row["note"]
+
+        if category is not None:
+            kind = "income" if new_amount >= 0 else "expense"
+            cat_id = get_or_create_category(conn, category, kind)
+            new_category = category
+        else:
+            cat_id = conn.execute(
+                "SELECT category_id FROM transactions WHERE id = ?", (transaction_id,)
+            ).fetchone()["category_id"]
+            new_category = row["category"]
+
+        conn.execute(
+            """UPDATE transactions
+               SET occurred_on = ?, amount = ?, category_id = ?, merchant = ?, note = ?
+               WHERE id = ?""",
+            (new_occurred_on, new_amount, cat_id, new_merchant, new_note, transaction_id),
+        )
+        return TransactionResult(
+            id=transaction_id,
+            occurred_on=new_occurred_on,
+            amount=new_amount,
+            category=new_category,
+            merchant=new_merchant,
+            note=new_note,
+        )
+
+
+def delete_transaction(transaction_id: int, db_path: Optional[str] = None) -> bool:
+    """Delete a transaction by id. Returns True if a row was deleted."""
+    with get_connection(db_path) as conn:
+        cur = conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        return cur.rowcount > 0
+
+
+def list_categories(db_path: Optional[str] = None) -> list[dict]:
+    with get_connection(db_path) as conn:
+        rows = conn.execute("SELECT name, kind FROM categories ORDER BY kind, name").fetchall()
+        return [dict(r) for r in rows]
+
+
 def budget_status(month: str, db_path: Optional[str] = None) -> list[dict]:
     """month: 'YYYY-MM'"""
     db_path = db_path or DEFAULT_DB_PATH
